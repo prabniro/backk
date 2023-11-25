@@ -1,14 +1,66 @@
 const express = require("express");
 const cors = require("cors");
-require("./db/config");
-const User = require('./db/User');
-const Product = require("./db/Product")
-const Jwt = require('jsonwebtoken');
-const jwtKey = 'e-com';
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
+const mongoose = require("mongoose");
 const app = express();
+
 
 app.use(express.json());
 app.use(cors());
+
+const productSchema = new mongoose.Schema({
+  name: String,
+  price: String,
+  category: String,
+  imageUrl: String,
+});
+
+const Product = mongoose.model("Product", productSchema);
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).send('Internal Server Error');
+  });
+
+app.post("/add-product", upload.single("image"), async (req, res) => {
+  try {
+    let product = new Product(req.body);
+
+    if (req.file) {
+      product.imageUrl = saveImage(req.file.buffer);
+    }
+
+    let result = await product.save();
+    res.status(201).send(result);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+app.get("/products", async (req, res) => {
+  try {
+    const products = await Product.find();
+    res.send(products);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+const saveImage = (buffer) => {
+  const fileName = `${Date.now()}-${Math.floor(Math.random() * 1000)}.jpg`;
+  const filePath = path.join(__dirname, "db", "uploads", fileName);
+  fs.writeFileSync(filePath, buffer);
+  return `/uploads/${fileName}`;
+};
+
+app.use("/uploads", express.static(path.join(__dirname, "db", "uploads")));
+
+
 
 app.post("/register", async (req, resp) => {
     let user = new User(req.body);
